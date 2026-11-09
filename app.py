@@ -5,60 +5,115 @@ from google import genai
 import PyPDF2
 import docx
 
-st.set_page_config(page_title="ATS Resume Checker", page_icon="📄", layout="wide")
+# ---------- Page Config ----------
+st.set_page_config(
+    page_title="ATS Resume Checker Pro",
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ---------- Custom UI Styling (Dark Slate & Glassmorphism) ----------
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #0F172A;
-        color: #F8FAFC;
-    }
-    .stSidebar {
-        background-color: #1E293B !important;
-    }
-    /* Glassmorphism containers */
-    div.stMetric, div.stForm, .element-container {
-        color: #F8FAFC;
-    }
-    .stButton>button {
-        background-color: #0078D4;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        background-color: #106EBE;
-        border-color: #106EBE;
-    }
-    /* Pill badge styling */
-    .keyword-pill {
-        display: inline-block;
-        background-color: #1E293B;
-        color: #38BDF8;
-        padding: 4px 12px;
-        margin: 4px;
-        border-radius: 16px;
-        font-size: 0.85rem;
-        border: 1px solid #0078D4;
-    }
-    .missing-pill {
-        display: inline-block;
-        background-color: #7F1D1D;
-        color: #FCA5A5;
-        padding: 4px 12px;
-        margin: 4px;
-        border-radius: 16px;
-        font-size: 0.85rem;
-        border: 1px solid #EF4444;
-    }
-</style>
-""", unsafe_allow_html=True)
+# ---------- Theme & Glassmorphism CSS Engine ----------
+def load_theme_styles(theme_mode: str):
+    if theme_mode == "Day":
+        # Clean, modern frosted light mode
+        bg_color = "#F8FAFC"
+        card_bg = "rgba(255, 255, 255, 0.75)"
+        border_color = "rgba(203, 213, 225, 0.6)"
+        text_color = "#0F172A"
+        sub_text = "#475569"
+        accent_blue = "#0078D4"
+        sidebar_bg = "#EEF2F6"
+    else:
+        # Deep slate dark mode with glass cards (#0F172A / #1E293B)
+        bg_color = "#0F172A"
+        card_bg = "rgba(30, 41, 59, 0.7)"
+        border_color = "rgba(51, 65, 85, 0.6)"
+        text_color = "#F8FAFC"
+        sub_text = "#94A3B8"
+        accent_blue = "#38BDF8"
+        sidebar_bg = "#0B0F19"
+
+    st.markdown(f"""
+    <style>
+        /* Global App Styling */
+        .stApp {{
+            background-color: {bg_color};
+            color: {text_color};
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }}
+        
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {{
+            background-color: {sidebar_bg} !important;
+            border-right: 1px solid {border_color};
+        }}
+
+        /* Glassmorphic Containers */
+        .glass-card {{
+            background: {card_bg};
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid {border_color};
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+            margin-bottom: 20px;
+        }}
+
+        /* Typography overrides */
+        h1, h2, h3, h4, h5, h6, p, span, label {{
+            color: {text_color} !important;
+        }}
+        
+        .subtext {{
+            color: {sub_text} !important;
+        }}
+
+        /* Custom Button Styling */
+        .stButton>button {{
+            background: linear-gradient(135deg, {accent_blue} 0%, #106EBE 100%);
+            color: white !important;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            padding: 0.6rem 1.2rem;
+            box-shadow: 0 4px 14px rgba(0, 120, 212, 0.3);
+            transition: all 0.3s ease;
+        }}
+        .stButton>button:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 120, 212, 0.4);
+        }}
+
+        /* Keyword Badge Pills */
+        .keyword-pill {{
+            display: inline-block;
+            background-color: rgba(56, 189, 248, 0.15);
+            color: {accent_blue} !important;
+            padding: 6px 14px;
+            margin: 4px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }}
+        .missing-pill {{
+            display: inline-block;
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #EF4444 !important;
+            padding: 6px 14px;
+            margin: 4px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }}
+    </style>
+    """, unsafe_allow_html=True)
 
 
-# ---------- Text extraction helpers ----------
+# ---------- Text Extraction Helpers ----------
 
 def extract_text_from_pdf(file) -> str:
     reader = PyPDF2.PdfReader(file)
@@ -85,7 +140,7 @@ def extract_text(uploaded_file) -> str:
         return ""
 
 
-# ---------- Gemini prompt + call ----------
+# ---------- Gemini Prompt & Processing ----------
 
 PROMPT_TEMPLATE = """You are an expert ATS (Applicant Tracking System) analyzer and professional resume reviewer.
 
@@ -122,7 +177,7 @@ def build_prompt(resume_text: str, job_description: str) -> str:
     return PROMPT_TEMPLATE.format(jd_clause=jd_clause, jd_block=jd_block, resume_text=resume_text)
 
 
-def call_gemini(api_key: str, prompt: str, model_name: str = "gemini-2.5-flash") -> str:
+def call_gemini(api_key: str, prompt: str, model_name: str) -> str:
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(model=model_name, contents=prompt)
     return response.text
@@ -140,109 +195,153 @@ def parse_json_response(raw_text: str) -> dict:
         return json.loads(match.group(0))
 
 
-# ---------- UI ----------
+# ---------- Main UI Interface ----------
 
 def main():
-    st.title("📄 ATS Resume Score Checker")
-    st.markdown(
-        "Upload your resume to get an instant ATS compatibility score, keyword gap analysis, "
-        "and concrete improvement suggestions powered by Gemini."
-    )
-
+    # Sidebar Configuration & Theme Controller
     with st.sidebar:
-        st.header("⚙️ Settings")
+        st.markdown("### ⚙️ Control Center")
+        
+        # Theme Selector (Day, Night, System)
+        theme_choice = st.selectbox(
+            "Appearance Mode",
+            options=["🌙 Night (Dark)", "☀️ Day (Light)", "💻 System Default"],
+            index=0,
+            help="Choose your favorite visual theme or sync with system preferences."
+        )
+        
+        # Resolve theme mode
+        if "Night" in theme_choice:
+            current_theme = "Night"
+        elif "Day" in theme_choice:
+            current_theme = "Day"
+        else:
+            # Default fallback for system (can be tuned or set to Night)
+            current_theme = "Night"
+
+        st.markdown("---")
         api_key = st.text_input(
             "Gemini API Key",
             type="password",
-            help="Get a free key at https://aistudio.google.com/app/apikey",
+            help="Get your key at aistudio.google.com",
         )
         model_name = st.selectbox(
             "Gemini Model",
             ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"],
-            help="Select the Gemini model variant for analysis.",
         )
-        st.caption("Your key is only used for this session and is never stored.")
+        st.markdown("---")
+        st.caption("🔒 Your API key is held securely in session memory and never stored.")
 
+    # Apply dynamic theme styles based on user selection
+    load_theme_styles(current_theme)
+
+    # Hero Header Section
+    st.markdown("""
+        <div style="padding: 10px 0px 20px 0px;">
+            <h1 style="margin-bottom: 5px;">📄 ATS Resume Checker Pro</h1>
+            <p class="subtext" style="font-size: 1.1rem;">
+               Optimize your resume with crystal-clear glassmorphic analytics, precise keyword matching, and AI insights.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Main Input Layout inside Glass Container
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
-        uploaded_file = st.file_uploader("Upload your resume", type=["pdf", "docx", "txt"])
+        uploaded_file = st.file_uploader("Upload Resume File", type=["pdf", "docx", "txt"])
     with col2:
         job_description = st.text_area(
-            "Job Description (optional)",
-            height=180,
-            placeholder="Paste the job description here for a targeted analysis...",
+            "Job Description (Optional)",
+            height=130,
+            placeholder="Paste target job description for customized gap analysis...",
         )
+    
+    analyze_btn = st.button("🚀 Run Comprehensive ATS Analysis", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    analyze_clicked = st.button("Analyze Resume", type="primary")
-
-    if not analyze_clicked:
+    if not analyze_btn:
         return
 
     if not api_key:
-        st.error("Please enter your Gemini API key in the sidebar.")
+        st.error("⚠️ Please provide your Gemini API key in the sidebar settings.")
         return
     if not uploaded_file:
-        st.error("Please upload a resume file.")
+        st.error("⚠️ Please upload your resume document before running the scan.")
         return
 
-    with st.spinner("Extracting text from resume..."):
+    # Processing state
+    with st.spinner("Extracting text and running neural verification..."):
         try:
             resume_text = extract_text(uploaded_file)
         except Exception as e:
-            st.error(f"Could not read the uploaded file: {e}")
+            st.error(f"Failed to read file: {e}")
             return
 
     if not resume_text:
-        st.error("No text could be extracted from this file. Try a different file (avoid scanned/image-only PDFs).")
+        st.error("No readable text found in document. Please avoid scanned image-only PDFs.")
         return
 
-    with st.spinner("Analyzing resume with Gemini..."):
+    with st.spinner("Analyzing structural metrics with Gemini..."):
         try:
             prompt = build_prompt(resume_text, job_description)
             raw_response = call_gemini(api_key, prompt, model_name)
             result = parse_json_response(raw_response)
         except Exception as e:
-            st.error(f"Something went wrong while analyzing the resume: {e}")
+            st.error(f"Error during AI evaluation: {e}")
             return
 
-    st.success("Analysis complete!")
+    st.success("✨ Analysis successfully completed!")
 
-    # Overall Score Section
+    # --- Results Dashboard ---
+    
+    # 1. Overall Score Metric Card
     score = result.get("ats_score", 0)
-    st.metric("Overall ATS Score", f"{score}/100")
-    st.progress(min(max(int(score), 0), 100) / 100)
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    col_score, col_prog = st.columns([1, 3])
+    with col_score:
+        st.metric("Overall ATS Score", f"{score}/100")
+    with col_prog:
+        st.write("<br>", unsafe_allow_html=True)
+        st.progress(min(max(int(score), 0), 100) / 100)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Score Breakdown Sub-metrics
+    # 2. Score Breakdown Sub-metrics
     breakdown = result.get("score_breakdown", {})
     if breakdown:
-        st.subheader("📊 Score Breakdown")
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.subheader("📊 Sub-Metric Breakdown")
         cols = st.columns(len(breakdown))
         for col, (key, value) in zip(cols, breakdown.items()):
             col.metric(key.replace("_", " ").title(), f"{value}/100")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Keyword Analysis Pills
+    # 3. Keyword Gap Analysis Pills
     matched_keywords = result.get("matched_keywords", [])
     missing_keywords = result.get("missing_keywords", [])
     
     if matched_keywords or missing_keywords:
-        st.subheader("🔑 Keyword Gap Analysis")
-        kw_col1, kw_col2 = st.columns(2)
-        with kw_col1:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.subheader("🔑 Keyword Match & Gaps")
+        kw1, kw2 = st.columns(2)
+        with kw1:
             st.markdown("**Matched Keywords**")
             if matched_keywords:
-                pills_html = "".join([f'<span class="keyword-pill">{kw}</span>' for kw in matched_keywords])
-                st.markdown(pills_html, unsafe_allow_html=True)
+                pills = "".join([f'<span class="keyword-pill">{kw}</span>' for kw in matched_keywords])
+                st.markdown(pills, unsafe_allow_html=True)
             else:
-                st.info("No primary matched keywords detected.")
-        with kw_col2:
+                st.info("No primary keywords matched.")
+        with kw2:
             st.markdown("**Missing Critical Keywords**")
             if missing_keywords:
-                pills_html = "".join([f'<span class="missing-pill">{kw}</span>' for kw in missing_keywords])
-                st.markdown(pills_html, unsafe_allow_html=True)
+                pills = "".join([f'<span class="missing-pill">{kw}</span>' for kw in missing_keywords])
+                st.markdown(pills, unsafe_allow_html=True)
             else:
-                st.success("Great job! No critical keywords missing.")
+                st.success("Excellent! No major keywords missing.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Strengths & Weaknesses
+    # 4. Strengths & Weaknesses
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("✅ Strengths")
@@ -252,23 +351,26 @@ def main():
         st.subheader("⚠️ Weaknesses")
         for w in result.get("weaknesses", []):
             st.markdown(f"- {w}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Improvement Suggestions
+    # 5. Improvement Suggestions & Executive Summary
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     suggestions = result.get("improvement_suggestions", [])
     if suggestions:
-        st.subheader("💡 Improvement Suggestions")
+        st.subheader("💡 Strategic Action Plan")
         for i, sug in enumerate(suggestions, 1):
-            st.markdown(f"{i}. {sug}")
+            st.markdown(f"**{i}.** {sug}")
 
-    # Summary
     if result.get("summary"):
+        st.markdown("---")
         st.subheader("📝 Executive Summary")
         st.write(result["summary"])
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Export Report Button
+    # 6. Export Audit Report
     report_content = f"""# ATS Resume Audit Report
 - **Overall Score:** {score}/100
-- **Summary:** {result.get('summary', '')}
+- **Executive Summary:** {result.get('summary', '')}
 
 ## Strengths
 """ + "\n".join([f"- {s}" for s in result.get('strengths', [])]) + "\n\n## Weaknesses\n" + \
@@ -276,13 +378,13 @@ def main():
     ", ".join(missing_keywords)
 
     st.download_button(
-        label="📥 Download Full Audit Report",
+        label="📥 Download Professional Audit Report (.md)",
         data=report_content,
         file_name="ats_audit_report.md",
         mime="text/markdown",
     )
 
-    with st.expander("View extracted resume text"):
+    with st.expander("🔍 Inspect Extracted Raw Resume Text"):
         st.text(resume_text)
 
 
